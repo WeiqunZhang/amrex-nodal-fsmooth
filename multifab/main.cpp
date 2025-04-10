@@ -1,6 +1,6 @@
 #include <AMReX.H>
-#include <AMReX_FArrayBox.H>
-#include <AMReX_IArrayBox.H>
+#include <AMReX_MultiFab.H>
+#include <AMReX_iMultiFab.H>
 #include <AMReX_ParmParse.H>
 
 using namespace amrex;
@@ -71,30 +71,44 @@ int main (int argc, char* argv[])
     amrex::Initialize(argc,argv);
     amrex::SetVerbose(0);
     {
-        int n_cell = 256;
+        int n_cell = 128;
+	int max_grid_size = 32;
         ParmParse pp;
         pp.query("n_cell", n_cell);
 
 	Box box(IntVect(0), IntVect(n_cell-1));
+	BoxList bl(box);
+	bl.maxSize(max_grid_size);
+	for (auto& b : bl) {
+	    int xlo = b.smallEnd(0);
+	    if ((xlo/max_grid_size) % 2 == 0) {
+		b = amrex::growHi(b, 0, 1) & box;
+	    } else {
+		b = amrex::growLo(b, 0, -1) & box;
+	    }
+	}
+	BoxArray ba(std::move(bl));
+	AMREX_ALWAYS_ASSERT(ba.numPts() == amrex::Math::powi<AMREX_SPACEDIM>(Long(n_cell)));
 
-	FArrayBox solfab(amrex::grow(box,1), 1);
-	FArrayBox rhsfab(box, 1);
-	IArrayBox mskfab(box, 1);
-	solfab.template setVal<RunOn::Device>(1.0);
-	rhsfab.template setVal<RunOn::Device>(2.0);
-	mskfab.template setVal<RunOn::Device>(0);
+	DistributionMapping dm{ba};
+	MultiFab solmf(ba, dm, 1, 1);
+	MultiFab rhsmf(ba, dm, 1, 0);
+	iMultiFab mskmf(ba, dm, 1, 0);
+	solmf.setVal(1.0);
+	rhsmf.setVal(2.0);
+	mskmf.setVal(0);
 
 	Real sig = 1.0;
 	GpuArray<Real,3> dxinv{1.0,1.0,1.0};
 
-	auto const& sol = solfab.array();
-	auto const& rhs = rhsfab.const_array();
-	auto const& msk = mskfab.const_array();
+	auto const& sol = solmf.arrays();
+	auto const& rhs = rhsmf.const_arrays();
+	auto const& msk = mskmf.const_arrays();
 
 	for (int color = 0; color < 8; ++color) {
-	    ParallelFor<128>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+	    ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
             {
-		mlndlap_gscolor_c(i,j,k,sol,rhs,sig,msk,dxinv,color);
+		mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 	    });
 	}
 	Gpu::streamSynchronize();
@@ -104,9 +118,9 @@ int main (int argc, char* argv[])
 	int iterations = 10;
 	for (int it = 0; it < iterations; ++it) {
 	    for (int color = 0; color < 8; ++color) {
-		ParallelFor<128>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
                 {
-		    mlndlap_gscolor_c(i,j,k,sol,rhs,sig,msk,dxinv,color);
+		    mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 		});
 	    }
 	    Gpu::streamSynchronize();
