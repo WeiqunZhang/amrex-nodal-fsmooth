@@ -4,7 +4,7 @@
 #include <AMReX_ParmParse.H>
 
 #define USE_MFPARFOR 1
-#define NTHREADS 128
+#define NTHREADS 256
 
 using namespace amrex;
 
@@ -75,9 +75,10 @@ int main (int argc, char* argv[])
     amrex::SetVerbose(0);
     {
         int n_cell = 128;
-	int max_grid_size = 16;
+	int max_grid_size = 32;
         ParmParse pp;
         pp.query("n_cell", n_cell);
+        pp.query("max_grid_size", max_grid_size);
 
 	Box box(IntVect(0), IntVect(n_cell-1));
 	BoxList bl(box);
