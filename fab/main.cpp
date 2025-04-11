@@ -3,6 +3,8 @@
 #include <AMReX_IArrayBox.H>
 #include <AMReX_ParmParse.H>
 
+#define NTHREADS 128
+
 using namespace amrex;
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
@@ -92,7 +94,7 @@ int main (int argc, char* argv[])
 	auto const& msk = mskfab.const_array();
 
 	for (int color = 0; color < 8; ++color) {
-	    ParallelFor<128>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+	    ParallelFor<NTHREADS>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
 		mlndlap_gscolor_c(i,j,k,sol,rhs,sig,msk,dxinv,color);
 	    });
@@ -104,7 +106,7 @@ int main (int argc, char* argv[])
 	int iterations = 10;
 	for (int it = 0; it < iterations; ++it) {
 	    for (int color = 0; color < 8; ++color) {
-		ParallelFor<128>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		ParallelFor<NTHREADS>(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
                 {
 		    mlndlap_gscolor_c(i,j,k,sol,rhs,sig,msk,dxinv,color);
 		});

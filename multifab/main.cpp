@@ -4,6 +4,7 @@
 #include <AMReX_ParmParse.H>
 
 #define USE_MFPARFOR 1
+#define NTHREADS 128
 
 using namespace amrex;
 
@@ -74,7 +75,7 @@ int main (int argc, char* argv[])
     amrex::SetVerbose(0);
     {
         int n_cell = 128;
-	int max_grid_size = 32;
+	int max_grid_size = 16;
         ParmParse pp;
         pp.query("n_cell", n_cell);
 
@@ -111,7 +112,7 @@ int main (int argc, char* argv[])
 
 	for (int color = 0; color < ncolors; ++color) {
 #ifdef USE_MFPARFOR
-	    ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
+	    ParallelFor<NTHREADS>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
             {
 		mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 	    });
@@ -121,7 +122,7 @@ int main (int argc, char* argv[])
 		auto const& sola = solmf.array(mfi);
 		auto const& rhsa = rhsmf.const_array(mfi);
 		auto const& mska = mskmf.const_array(mfi);
-		ParallelFor<128>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		ParallelFor<NTHREADS>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
 		{
 		    mlndlap_gscolor_c(i,j,k,sola,rhsa,sig,mska,dxinv,color);
 		});
@@ -136,7 +137,7 @@ int main (int argc, char* argv[])
 	for (int it = 0; it < iterations; ++it) {
 #ifdef USE_MFPARFOR
 	    for (int color = 0; color < ncolors; ++color) {
-		ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
+		ParallelFor<NTHREADS>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
                 {
 		    mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 		});
@@ -149,7 +150,7 @@ int main (int argc, char* argv[])
 		auto const& rhsa = rhsmf.const_array(mfi);
 		auto const& mska = mskmf.const_array(mfi);
 		for (int color = 0; color < ncolors; ++color) {
-		    ParallelFor<128>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		    ParallelFor<NTHREADS>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
 		    {
 			mlndlap_gscolor_c(i,j,k,sola,rhsa,sig,mska,dxinv,color);
 		    });
