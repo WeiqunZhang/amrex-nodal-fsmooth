@@ -3,6 +3,8 @@
 #include <AMReX_iMultiFab.H>
 #include <AMReX_ParmParse.H>
 
+#define USE_MFPARFOR 1
+
 using namespace amrex;
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE
@@ -105,11 +107,26 @@ int main (int argc, char* argv[])
 	auto const& rhs = rhsmf.const_arrays();
 	auto const& msk = mskmf.const_arrays();
 
-	for (int color = 0; color < 8; ++color) {
+	int ncolors = 8;
+
+	for (int color = 0; color < ncolors; ++color) {
+#ifdef USE_MFPARFOR
 	    ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
             {
 		mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 	    });
+#else
+	    for (MFIter mfi(solmf); mfi.isValid(); ++mfi) {
+		Box const& b = mfi.validbox();
+		auto const& sola = solmf.array(mfi);
+		auto const& rhsa = rhsmf.const_array(mfi);
+		auto const& mska = mskmf.const_array(mfi);
+		ParallelFor<128>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		{
+		    mlndlap_gscolor_c(i,j,k,sola,rhsa,sig,mska,dxinv,color);
+		});
+	    }
+#endif
 	}
 	Gpu::streamSynchronize();
 
@@ -117,13 +134,28 @@ int main (int argc, char* argv[])
 
 	int iterations = 10;
 	for (int it = 0; it < iterations; ++it) {
-	    for (int color = 0; color < 8; ++color) {
+#ifdef USE_MFPARFOR
+	    for (int color = 0; color < ncolors; ++color) {
 		ParallelFor<128>(solmf, [=] AMREX_GPU_DEVICE (int b, int i, int j, int k)
                 {
 		    mlndlap_gscolor_c(i,j,k,sol[b],rhs[b],sig,msk[b],dxinv,color);
 		});
 	    }
 	    Gpu::streamSynchronize();
+#else
+	    for (MFIter mfi(solmf); mfi.isValid(); ++mfi) {
+		Box const& b = mfi.validbox();
+		auto const& sola = solmf.array(mfi);
+		auto const& rhsa = rhsmf.const_array(mfi);
+		auto const& mska = mskmf.const_array(mfi);
+		for (int color = 0; color < ncolors; ++color) {
+		    ParallelFor<128>(b, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+		    {
+			mlndlap_gscolor_c(i,j,k,sola,rhsa,sig,mska,dxinv,color);
+		    });
+		}
+	    }
+#endif
 	}
 	
 	double t1 = second();
