@@ -4,7 +4,7 @@
 #include <AMReX_ParmParse.H>
 
 #define USE_MFPARFOR 1
-#define NTHREADS 256
+#define NTHREADS 128
 
 using namespace amrex;
 
